@@ -1,15 +1,6 @@
 import subprocess
-import os
 from smolagents import Tool
-
-PROJECT_BASE = os.getcwd()
-
-def write_log(tool_name, inputs, output):
-    import datetime
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_entry = f" [{'='*10} {timestamp} {tool_name} {'='*10}]\n INPUTS: {inputs}\n OUTPUT: {output}\n\n"
-    with open("agent_audit.log", "a", encoding="utf-8") as f:
-        f.write(log_entry)
+from .utils import write_log, PROJECT_BASE
 
 class TerminalTool(Tool):
     name = "terminal"
