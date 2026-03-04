@@ -14,6 +14,8 @@ from textual import work
 
 # --- TU CORE (SIN MODIFICACIONES) ---
 PROJECT_BASE = os.getcwd()
+MODEL_ID = "qwen2.5-coder:7b-instruct-q4_K_M"
+PROVIDER = "Ollama"
 
 def write_log(tool_name, inputs, output):
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -23,7 +25,10 @@ def write_log(tool_name, inputs, output):
 
 def safe_path(path):
     if not path or path == "/": return PROJECT_BASE
-    full_path = os.path.abspath(os.path.join(PROJECT_BASE, path.lstrip("/")))
+    # Eliminamos cualquier intento de ruta absoluta que envíe el modelo para forzar relativa
+    clean_path = path.replace(PROJECT_BASE, "").lstrip("/")
+    full_path = os.path.abspath(os.path.join(PROJECT_BASE, clean_path))
+    
     if not full_path.startswith(PROJECT_BASE):
         return PROJECT_BASE
     return full_path
@@ -72,12 +77,17 @@ class FileReadTool(Tool):
     description = "Lee el contenido de un archivo."
     inputs = {"path": {"type": "string", "description": "Ruta del archivo", "nullable": True}}
     output_type = "string"
+
     def forward(self, path: str = None):
-        if not path: return "❌ Error: Debes proporcionar una ruta."
+        if not path: return "❌ Error: Ruta vacía."
+        target = safe_path(path) # Usamos safe_path por seguridad
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                return f"--- CONTENIDO DE {path} ---\n{f.read()}"
-        except Exception as e: return f"❌ Error leyendo {path}: {str(e)}"
+            with open(target, "r", encoding="utf-8") as f:
+                content = f.read()
+                write_log(self.name, path, "Lectura exitosa") # Añadimos el log
+                return f"--- CONTENIDO DE {path} ---\n{content}"
+        except Exception as e:
+            return f"❌ Error leyendo {path}: {str(e)}"
 
 class TerminalTool(Tool):
     name = "terminal"
@@ -93,7 +103,7 @@ class TerminalTool(Tool):
         except Exception as e: return str(e)
 
 # --- CONFIGURACIÓN AGENTE ---
-model = LiteLLMModel(model_id="ollama/qwen2.5-coder:7b-instruct-q4_K_M", api_base="http://localhost:11434")
+model = LiteLLMModel(model_id=f"ollama/{MODEL_ID}", api_base="http://localhost:11434")
 agent = ToolCallingAgent(
     tools=[RepoMapTool(), FileWriteTool(), TerminalTool(), FileReadTool()],
     model=model,
@@ -102,15 +112,38 @@ agent = ToolCallingAgent(
 )
 
 SYSTEM_PROMPT = f"""
-Eres un Arquitecto de Software Senior. 
+ERES UN AGENTE DE ACCIÓN LOCAL, Arquitecto de Software Senior.
+
 TRABAJO LOCAL: Estás limitado exclusivamente a la carpeta: {PROJECT_BASE}
-REGLAS: ... (Aquí va tu prompt completo) ...
+TU DIRECTORIO DE TRABAJO ES: {PROJECT_BASE}
+
+INSTRUCCIONES CRÍTICAS:
+1. TIENES ACCESO TOTAL a las herramientas proporcionadas (repo_mapper, file_writer, etc.). 
+2. NO PIDAS PERMISO para acceder a archivos, YA LO TIENES. Ejecuta las herramientas directamente.
+3. Si el usuario te pide crear un archivo, USA 'file_writer'. No digas "necesitaríamos acceder", simplemente HAZLO.
+4. Todas las rutas que uses deben ser RELATIVAS al proyecto.
+
+REGLAS:
+1. NUNCA intentes acceder a rutas fuera de esta carpeta.
+2. NUNCA uses '/' como root_dir en repo_mapper. Usa '.' para el proyecto actual.
+3. No uses comandos de Python (os, shutil) para archivos; usa 'file_writer'.
+4. Si necesitas una carpeta, 'file_writer' la creará por ti al guardar un archivo.
+
+IMPORTANTE: 'file_writer' crea carpetas automáticamente. No intentes crearlas tú con comandos de Python.
+
+FLUJO OBLIGATORIO:
+1. Mapea el proyecto con 'repo_mapper' (usa '.' para la raíz).
+2. Si vas a modificar algo, lee primero con 'file_reader'.
+3. Escribe los cambios con 'file_writer'.
+4. Prueba con 'terminal' (ej: php artisan test, python3 script.py).
 """
+
+
 
 # --- INTERFAZ TEXTUAL ---
 
 class ArquitectoApp(App):
-    """Una interfaz profesional para el Agente."""
+    """Interfaz mejorada con Textual."""
     
     CSS = """
     Screen {
@@ -121,13 +154,14 @@ class ArquitectoApp(App):
         height: 1fr;
     }
     #chat_area {
-        width: 75%;
-        border: solid #414868;
+        width: 65%; /* Reducido para dar espacio a logs */
+        border: tall #414868;
+        background: #1a1b26;
         padding: 1;
     }
     #log_area {
-        width: 25%;
-        border: solid #414868;
+        width: 35%; /* Panel de logs más ancho */
+        border: tall #414868;
         background: #16161e;
         color: #7aa2f7;
     }
@@ -135,70 +169,78 @@ class ArquitectoApp(App):
         color: #9ece6a;
         margin: 1 0;
         text-style: bold;
+        border-bottom: dashed #2e3c64;
     }
     .agent-msg {
         color: #7dcfff;
         margin: 1 0;
-        border-left: solid #7dcfff;
-        padding-left: 1;
+        background: #24283b;
+        padding: 1;
     }
     Input {
         dock: bottom;
+        height: 5; /* Input más grande para prompts amplios */
         margin: 1;
         border: double #bb9af7;
+        background: #1a1b26;
     }
     """
 
     def compose(self) -> ComposeResult:
-        yield Header(show_clock=True, name="Arquitecto M4")
+        # Header con info del modelo y ruta
+        yield Header(show_clock=True)
         with Container(id="main_container"):
             with VerticalScroll(id="chat_area"):
-                yield Label("✨ Bienvenido. Esperando tu comando...", id="welcome-text")
-            yield RichLog(id="log_area", highlight=True, markup=True)
-        yield Input(placeholder="Escribe tu mensaje aquí y presiona Enter...", id="user-input")
+                yield Label("✨ Arquitecto M4 Online. Listo para tus instrucciones.", id="welcome-text")
+            yield RichLog(id="log_area", highlight=True, markup=True, wrap=True)
+        yield Input(placeholder="📝 Describe la tarea detalladamente aquí...", id="user-input")
         yield Footer()
 
     def on_mount(self) -> None:
-        self.title = "Arquitecto Senior M4"
-        self.sub_title = f"Ruta: {PROJECT_BASE}"
-        # Iniciar monitor de logs
+        # Actualizamos el Header con la info técnica
+        self.title = f"Arquitecto Senior M4 [{PROVIDER}]"
+        self.sub_title = f"Modelo: {MODEL_ID} | 📂 {PROJECT_BASE}"
         self.set_interval(1, self.update_logs)
 
     def update_logs(self):
-        """Lee el archivo de auditoría y actualiza el panel lateral."""
         if os.path.exists("agent_audit.log"):
             with open("agent_audit.log", "r") as f:
-                content = f.read().splitlines()
-                # Solo mostrar las últimas líneas nuevas
+                # Buscamos solo lo nuevo para no saturar
+                lines = f.readlines()
                 log_widget = self.query_one("#log_area", RichLog)
+                
+                # Si el archivo creció, actualizamos. 
+                # Un truco simple es comparar el número de líneas o simplemente limpiar y reescribir
+                # pero con clear() y write() es suficiente si no son miles de líneas.
                 log_widget.clear()
-                for line in content[-50:]: # Últimas 50 líneas
-                    log_widget.write(line)
-
-    @work(exclusive=True)
-    async def process_task(self, user_text: str) -> None:
+                log_widget.write("".join(lines[-30:])) # Últimas 30 líneas de actividad
+                    
+    @work(exclusive=True, thread=True)
+    def process_task(self, user_text: str) -> None:
         chat_area = self.query_one("#chat_area")
+        # Mostrar el prompt en el chat
+        self.call_from_thread(chat_area.mount, Label(f"➜ USUARIO: {user_text}", classes="user-msg"))
         
-        # 1. Agregar mensaje del usuario al chat
-        chat_area.mount(Label(f"➜ Tú: {user_text}", classes="user-msg"))
-        
-        # 2. Silenciador y ejecución
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
             try:
-                # Ejecutamos el agente (esto corre en un hilo separado gracias a @work)
+                # El agente trabaja en silencio
                 response = agent.run(f"{SYSTEM_PROMPT}\n\nTarea: {user_text}")
-                chat_area.mount(Label(f"🤖 Arquitecto:\n{response}", classes="agent-msg"))
+                self.call_from_thread(chat_area.mount, Label(f"🤖 ARQUITECTO:\n{response}", classes="agent-msg"))
             except Exception as e:
-                chat_area.mount(Label(f"❌ Error: {str(e)}", classes="agent-msg"))
+                self.call_from_thread(chat_area.mount, Label(f"❌ ERROR: {str(e)}", classes="agent-msg"))
         
-        chat_area.scroll_end()
+        self.call_from_thread(chat_area.scroll_end)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.value.strip():
             self.process_task(event.value)
-            event.input.value = "" # Limpiar input
+            event.input.value = ""
 
 if __name__ == "__main__":
+    # Limpiamos logs viejos al arrancar
+    if os.path.exists("agent_audit.log"):
+        open("agent_audit.log", "w").close()
+    
     app = ArquitectoApp()
     app.run()
