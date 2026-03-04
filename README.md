@@ -4,11 +4,59 @@ Un agente de IA basado en smolagents con interfaz TUI para automatizar tareas de
 
 ## 🚀 Características
 
-- **Agente Inteligente**: Basado en modelos de lenguaje locales (Ollama)
+- **Arquitectura Modular**: Código organizado en módulos separados (agent, tools, utils)
+- **Selector de Modelos Dinámico**: Cambia modelos de Ollama en tiempo de ejecución (Ctrl+M)
 - **Herramientas Integradas**: Mapeo de repositorio, lectura/escritura de archivos, ejecución de terminal
-- **Interfaz TUI**: Terminal interactiva con Textual
-- **Configuración Flexible**: Variables de entorno mediante `.env`
+- **Interfaz TUI Moderna**: Terminal interactiva con Textual y diseño optimizado
+- **Configuración por .env**: Variables de entorno externas para fácil configuración
 - **Seguridad**: Restricciones de acceso solo al directorio del proyecto
+- **Actualización en Tiempo Real**: El agente se actualiza inmediatamente al cambiar modelo
+
+## 🏗️ Arquitectura del Proyecto
+
+```
+Agent/
+├── agent.py              # Core del agente y configuración
+├── tui.py                # Interfaz de usuario TUI
+├── tools/                # Herramientas del agente
+│   ├── __init__.py       # Exportaciones de herramientas
+│   ├── repo_map_tool.py  # Mapeo de repositorio
+│   ├── file_write_tool.py # Escritura de archivos
+│   ├── file_read_tool.py  # Lectura de archivos
+│   ├── terminal_tool.py   # Ejecución en terminal
+│   └── utils/             # Utilidades compartidas
+│       ├── __init__.py    # Exportaciones de utilidades
+│       └── common.py      # Funciones comunes
+├── .env                  # Variables de entorno (no versionado)
+├── .env.example          # Ejemplo de configuración
+├── requirements.txt      # Dependencias Python
+└── README.md            # Este archivo
+```
+
+### 📦 Módulos Principales
+
+#### **agent.py** - Core del Agente
+- Configuración desde variables de entorno (`.env`)
+- Inicialización del agente smolagents
+- Funciones de actualización de modelos
+- Gestión de modelos disponibles de Ollama
+
+#### **tui.py** - Interfaz de Usuario
+- Interfaz TUI con Textual
+- Selector de modelos dinámico (Ctrl+M)
+- Gestión de chat y logs
+- Diseño responsive y moderno
+
+#### **tools/** - Herramientas del Agente
+- **repo_map_tool.py**: Mapeo y análisis de repositorios
+- **file_write_tool.py**: Escritura y creación de archivos
+- **file_read_tool.py**: Lectura de archivos
+- **terminal_tool.py**: Ejecución de comandos
+
+#### **tools/utils/** - Utilidades Compartidas
+- Funciones reutilizables entre herramientas
+- Gestión de logs y paths seguros
+- Evita duplicación de código
 
 ## 📋 Requisitos Previos
 
@@ -46,6 +94,8 @@ pip install -r requirements.txt
 
 ### 4. Configurar Variables de Entorno
 
+El proyecto utiliza un sistema de configuración basado en variables de entorno para máxima flexibilidad:
+
 ```bash
 # Copiar el archivo de ejemplo
 cp .env.example .env
@@ -53,6 +103,26 @@ cp .env.example .env
 # Editar el archivo .env según tus necesidades
 nano .env  # o tu editor preferido
 ```
+
+#### Variables de Configuración (.env)
+
+```bash
+# Configuración del Agente
+MODEL_ID=qwen2.5-coder:7b-instruct-q4_K_M
+PROVIDER=Ollama
+API_BASE=http://localhost:11434
+MAX_STEPS=30
+
+# System Prompt del Agente (formato de una sola línea)
+SYSTEM_PROMPT="ERES UN AGENTE DE ACCIÓN LOCAL, Arquitecto de Software Senior.\n\nTRABAJO LOCAL: Estás limitado exclusivamente a la carpeta: {PROJECT_BASE}\n..."
+```
+
+#### 🔧 Configuración Modular
+
+- **agent.py**: Lee todas las configuraciones desde `.env` usando `python-dotenv`
+- **Separación de responsabilidades**: La lógica del agente está separada de la interfaz
+- **Configuración externa**: No hay valores hardcodeados en el código
+- **Cambios en tiempo real**: El selector de modelos cambia la configuración durante la ejecución
 
 **Importante**: El archivo `.env` usa formato de una sola línea para el `SYSTEM_PROMPT` para ser compatible con `python-dotenv`. No uses comillas triples o múltiples líneas.
 
@@ -132,11 +202,69 @@ El agente cuenta con las siguientes herramientas:
 
 ## 📝 Uso de la Interfaz TUI
 
-1. **Inicia la aplicación** con `python tui.py`
-2. **Escribe tu tarea** en el campo de entrada
-3. **Presiona Enter** para ejecutar la tarea
-4. **Observa los resultados** en el área de chat
-5. **Revisa los logs** en el panel derecho
+### Iniciar la Aplicación
+
+```bash
+# Asegúrate de que el entorno virtual esté activado
+python tui.py
+```
+
+### Interfaz Principal
+
+La aplicación muestra una interfaz TUI moderna con:
+
+- **Header**: Muestra "AgentScripting", el modelo actual y acceso rápido al selector
+- **Chat**: Área principal para interactuar con el agente
+- **Logs**: Panel derecho con logs de auditoría en tiempo real
+- **Input**: Campo para escribir tareas
+
+### Selector de Modelos Dinámico
+
+Cambia modelos de Ollama en tiempo de ejecución:
+
+1. **Presiona Ctrl+M**: Abre el menú de selección de modelos
+2. **Navega**: Usa las flechas ↑↓ para moverte entre modelos
+3. **Selecciona**: Presiona Enter para confirmar o Esc para cancelar
+4. **Actualización**: El agente se actualiza inmediatamente
+
+**Características**:
+- **Lista automática**: Obtiene modelos disponibles con `ollama list`
+- **Actualización en tiempo real**: El modelo cambia sin reiniciar
+- **Interfaz integrada**: Selector nativo de Textual
+- **Confirmación visual**: Notificación y actualización del header
+
+### Uso del Agente
+
+1. **Escribe tu tarea** en el campo de entrada
+2. **Presiona Enter** para ejecutar
+3. **Observa los resultados** en el área de chat
+4. **Revisa los logs** de auditoría en el panel derecho
+
+### O Usar el Agente Directamente
+
+```python
+from agent import run_agent_task
+
+# Ejecutar una tarea
+result = run_agent_task("Crea un archivo README.md para este proyecto")
+print(result)
+```
+
+## 🔧 Herramientas del Agente
+
+El agente incluye herramientas modulares:
+
+1. **repo_mapper**: Mapea y analiza la estructura del repositorio
+2. **file_writer**: Crea y modifica archivos
+3. **file_reader**: Lee archivos del proyecto
+4. **terminal**: Ejecuta comandos del sistema
+
+### Arquitectura Modular
+
+- **Separación de responsabilidades**: Cada herramienta en su propio archivo
+- **Utilidades compartidas**: Funciones comunes en `tools/utils/`
+- **Configuración externa**: Todas las variables en `.env`
+- **Core independiente**: Lógica del agente separada de la interfaz
 
 ## 🛡️ Seguridad
 

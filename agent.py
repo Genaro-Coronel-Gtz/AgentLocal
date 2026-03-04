@@ -27,6 +27,55 @@ agent = ToolCallingAgent(
     max_steps=MAX_STEPS
 )
 
+def update_agent_model(new_model_id: str) -> bool:
+    """
+    Actualiza el modelo del agente en tiempo de ejecución.
+    
+    Args:
+        new_model_id (str): ID del nuevo modelo
+        
+    Returns:
+        bool: True si se actualizó correctamente, False si hubo error
+    """
+    global agent, MODEL_ID
+    try:
+        MODEL_ID = new_model_id
+        agent = ToolCallingAgent(
+            tools=[RepoMapTool(), FileWriteTool(), TerminalTool(), FileReadTool()],
+            model=LiteLLMModel(model_id=f"ollama/{MODEL_ID}", api_base=API_BASE),
+            add_base_tools=True,
+            max_steps=MAX_STEPS
+        )
+        return True
+    except Exception as e:
+        print(f"Error actualizando modelo: {e}")
+        return False
+
+def get_available_models() -> list:
+    """
+    Obtiene la lista de modelos disponibles en Ollama.
+    
+    Returns:
+        list: Lista de modelos disponibles
+    """
+    try:
+        import subprocess
+        result = subprocess.run(['ollama', 'list'], capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            lines = result.stdout.strip().split('\n')[1:]  # Skip header
+            models = []
+            for line in lines:
+                if line.strip():
+                    # Extraer el nombre del modelo (primera columna)
+                    model_name = line.split()[0]
+                    models.append(model_name)
+            return models
+        else:
+            return []
+    except Exception as e:
+        print(f"Error obteniendo modelos: {e}")
+        return []
+
 
 def run_agent_task(user_text: str) -> str:
     """
