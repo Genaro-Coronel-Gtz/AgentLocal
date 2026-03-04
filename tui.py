@@ -3,101 +3,20 @@ import subprocess
 import datetime
 import io
 import contextlib
-from smolagents import LiteLLMModel, Tool, ToolCallingAgent
+from smolagents import LiteLLMModel, ToolCallingAgent
 
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, Input, Static, RichLog, Label, LoadingIndicator
 from textual.containers import Container, VerticalScroll, Vertical
 from textual import work
 
+# Importar herramientas desde la carpeta tools
+from tools import RepoMapTool, FileWriteTool, FileReadTool, TerminalTool
+
 PROJECT_BASE = os.getcwd()
 MODEL_ID = "qwen2.5-coder:7b-instruct-q4_K_M"
 PROVIDER = "Ollama"
 
-def write_log(tool_name, inputs, output):
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_entry = f" [{'='*10} {timestamp} {tool_name} {'='*10}]\n INPUTS: {inputs}\n OUTPUT: {output}\n\n"
-    with open("agent_audit.log", "a", encoding="utf-8") as f:
-        f.write(log_entry)
-
-def safe_path(path):
-    if not path or path == "/": return PROJECT_BASE
-    # Eliminamos cualquier intento de ruta absoluta que envíe el modelo para forzar relativa
-    clean_path = path.replace(PROJECT_BASE, "").lstrip("/")
-    full_path = os.path.abspath(os.path.join(PROJECT_BASE, clean_path))
-    
-    if not full_path.startswith(PROJECT_BASE):
-        return PROJECT_BASE
-    return full_path
-
-# --- HERRAMIENTAS (TUS CLASES ORIGINALES) ---
-class RepoMapTool(Tool):
-    name = "repo_mapper"
-    description = "Muestra carpetas del proyecto. Solo funciona dentro del directorio actual."
-    inputs = {"root_dir": {"type": "string", "description": "Subcarpeta (opcional)", "nullable": True}}
-    output_type = "string"
-    def forward(self, root_dir: str = "."):
-        target = safe_path(root_dir)
-        exclude = {'.git', 'vendor', 'node_modules', 'storage', 'bootstrap/cache', '__pycache__', 'agent-venv'}
-        tree = []
-        for root, dirs, files in os.walk(target):
-            dirs[:] = [d for d in dirs if d not in exclude]
-            level = root.replace(target, '').count(os.sep)
-            indent = ' ' * 4 * level
-            tree.append(f"{indent}{os.path.basename(root)}/")
-            valid_exts = ('.php', '.js', '.jsx', '.ts', '.tsx', '.rb', '.py', '.md', '.yml', '.json')
-            for f in files:
-                if f.endswith(valid_exts):
-                    tree.append(f"{' ' * 4 * (level + 1)}{f}")
-        res = "\n".join(tree[:100])
-        write_log(self.name, root_dir, "Mapa generado.")
-        return res
-
-class FileWriteTool(Tool):
-    name = "file_writer"
-    description = "Escribe archivos DENTRO del proyecto. Crea carpetas automáticamente."
-    inputs = {"path": {"type": "string", "description": "Ruta relativa", "nullable": True}, "content": {"type": "string", "description": "Contenido", "nullable": True}}
-    output_type = "string"
-    def forward(self, path: str = None, content: str = None):
-        if not path: return "❌ Error: Ruta vacía."
-        target = safe_path(path)
-        try:
-            os.makedirs(os.path.dirname(target), exist_ok=True)
-            with open(target, "w", encoding="utf-8") as f:
-                f.write(content if content else "")
-            write_log(self.name, path, f"Guardado en {target}")
-            return f"✅ Archivo guardado en: {path}"
-        except Exception as e: return f"❌ Error: {str(e)}"
-
-class FileReadTool(Tool):
-    name = "file_reader"
-    description = "Lee el contenido de un archivo."
-    inputs = {"path": {"type": "string", "description": "Ruta del archivo", "nullable": True}}
-    output_type = "string"
-
-    def forward(self, path: str = None):
-        if not path: return "❌ Error: Ruta vacía."
-        target = safe_path(path) # Usamos safe_path por seguridad
-        try:
-            with open(target, "r", encoding="utf-8") as f:
-                content = f.read()
-                write_log(self.name, path, "Lectura exitosa") # Añadimos el log
-                return f"--- CONTENIDO DE {path} ---\n{content}"
-        except Exception as e:
-            return f"❌ Error leyendo {path}: {str(e)}"
-
-class TerminalTool(Tool):
-    name = "terminal"
-    description = "Ejecuta comandos DENTRO de la carpeta del proyecto."
-    inputs = {"command": {"type": "string", "description": "Comando", "nullable": True}}
-    output_type = "string"
-    def forward(self, command: str = None):
-        if not command: return "❌ No hay comando."
-        try:
-            result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=30, cwd=PROJECT_BASE)
-            write_log(self.name, command, "Ejecutado.")
-            return f"STDOUT: {result.stdout}\nSTDERR: {result.stderr}"
-        except Exception as e: return str(e)
 
 # --- AGENTE ---
 agent = ToolCallingAgent(
