@@ -1,48 +1,32 @@
 import os
+from dotenv import load_dotenv
 from smolagents import LiteLLMModel, ToolCallingAgent
 
 # Importar herramientas desde la carpeta tools
 from tools import RepoMapTool, FileWriteTool, FileReadTool, TerminalTool
 
+# Cargar variables de entorno desde .env
+load_dotenv()
+
+# Configuración desde variables de entorno
 PROJECT_BASE = os.getcwd()
-MODEL_ID = "qwen2.5-coder:7b-instruct-q4_K_M"
-PROVIDER = "Ollama"
+MODEL_ID = os.getenv("MODEL_ID", "qwen2.5-coder:7b-instruct-q4_K_M")
+PROVIDER = os.getenv("PROVIDER", "Ollama")
+API_BASE = os.getenv("API_BASE", "http://localhost:11434")
+MAX_STEPS = int(os.getenv("MAX_STEPS", "30"))
+SYSTEM_PROMPT_TEMPLATE = os.getenv("SYSTEM_PROMPT", "")
+
+# Formatear el system prompt con el PROJECT_BASE
+SYSTEM_PROMPT = SYSTEM_PROMPT_TEMPLATE.format(PROJECT_BASE=PROJECT_BASE) if SYSTEM_PROMPT_TEMPLATE else ""
 
 # --- AGENTE ---
 agent = ToolCallingAgent(
     tools=[RepoMapTool(), FileWriteTool(), TerminalTool(), FileReadTool()],
-    model=LiteLLMModel(model_id=f"ollama/{MODEL_ID}", api_base="http://localhost:11434"),
+    model=LiteLLMModel(model_id=f"ollama/{MODEL_ID}", api_base=API_BASE),
     add_base_tools=True,
-    max_steps=30
+    max_steps=MAX_STEPS
 )
 
-# PROMPT DE ACCESO TOTAL
-SYSTEM_PROMPT = f"""
-ERES UN AGENTE DE ACCIÓN LOCAL, Arquitecto de Software Senior.
-
-TRABAJO LOCAL: Estás limitado exclusivamente a la carpeta: {PROJECT_BASE}
-TU DIRECTORIO DE TRABAJO ES: {PROJECT_BASE}
-
-INSTRUCCIONES CRÍTICAS:
-1. TIENES ACCESO TOTAL a las herramientas proporcionadas (repo_mapper, file_writer, etc.). 
-2. NO PIDAS PERMISO para acceder a archivos, YA LO TIENES. Ejecuta las herramientas directamente.
-3. Si el usuario te pide crear un archivo, USA 'file_writer'. No digas "necesitaríamos acceder", simplemente HAZLO.
-4. Todas las rutas que uses deben ser RELATIVAS al proyecto.
-
-REGLAS:
-1. NUNCA intentes acceder a rutas fuera de esta carpeta.
-2. NUNCA uses '/' como root_dir en repo_mapper. Usa '.' para el proyecto actual.
-3. No uses comandos de Python (os, shutil) para archivos; usa 'file_writer'.
-4. Si necesitas una carpeta, 'file_writer' la creará por ti al guardar un archivo.
-
-IMPORTANTE: 'file_writer' crea carpetas automáticamente. No intentes crearlas tú con comandos de Python.
-
-FLUJO OBLIGATORIO:
-1. Mapea el proyecto con 'repo_mapper' (usa '.' para la raíz).
-2. Si vas a modificar algo, lee primero con 'file_reader'.
-3. Escribe los cambios con 'file_writer'.
-4. Prueba con 'terminal' (ej: php artisan test, python3 script.py).
-"""
 
 def run_agent_task(user_text: str) -> str:
     """
