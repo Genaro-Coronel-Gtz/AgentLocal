@@ -138,28 +138,59 @@ FLUJO OBLIGATORIO:
 class ArquitectoApp(App):
     CSS = """
     Screen { background: #1a1b26; }
+    
     #main_container { layout: horizontal; height: 1fr; }
     
-    #chat_area { 
-        width: 65%; border: tall #414868; background: #1a1b26; padding: 1; 
+    /* Contenedor de la izquierda (Chat + Loader) */
+    #left_pane {
+        width: 65%;
+        height: 1fr;
+        layout: vertical;
     }
-    #chat_area.working { border: tall #bb9af7; } /* Borde púrpura cuando trabaja */
+
+    #chat_area { 
+        height: 1fr; /* Ocupa todo el espacio disponible */
+        border: tall #414868; 
+        background: #1a1b26; 
+        padding: 1; 
+    }
+    #chat_area.working { border: tall #bb9af7; }
 
     #log_area { 
-        width: 35%; border: tall #414868; background: #16161e; color: #7aa2f7; 
+        width: 35%; 
+        border: tall #414868; 
+        background: #16161e; 
+        color: #7aa2f7; 
     }
     
     .user-msg { color: #9ece6a; margin: 1 0; text-style: bold; border-bottom: dashed #2e3c64; }
     .agent-msg { color: #7dcfff; margin: 1 0; background: #24283b; padding: 1; border-left: solid #7dcfff; }
     
     #loader-container {
-        height: 3;
-        content-align: center middle;
-        display: none; /* Oculto por defecto */
+        height: auto;
+        min-height: 3;
+        background: #1f2335;
+        border-top: solid #414868;
+        display: none;
+        padding: 0 1;
     }
-    #loader-container.visible { display: block; }
+    #loader-container.visible { display: block; layout: horizontal; }
+    #loader-text { 
+        margin-left: 2; 
+        color: #e0af68; 
+        content-align: left middle; /* Antes decía middle left, ahora está corregido */
+        height: 3; 
+    }
 
-    Input { dock: bottom; height: 5; margin: 1; border: double #bb9af7; }
+    /* Estilo para el TextArea de entrada mejorado */
+    #user-input {
+        dock: bottom;
+        height: 5; 
+        margin: 1;
+        border: double #bb9af7;
+        background: #1a1b26;
+        color: white;
+    }
     """
 
     def compose(self) -> ComposeResult:
@@ -172,7 +203,7 @@ class ArquitectoApp(App):
                     yield LoadingIndicator()
                     yield Label(" El Arquitecto está operando...", variant="title")
             yield RichLog(id="log_area", highlight=True, markup=True)
-        yield Input(placeholder="📝 Describe la tarea...", id="user-input")
+        yield Input(placeholder="> Describe la tarea...", id="user-input")
         yield Footer()
 
     def on_mount(self) -> None:
