@@ -21,7 +21,7 @@
     "TerminalTool": {
       "name": "Terminal",
       "description": "Ejecuta comandos del sistema",
-      "enabled": false,
+      "enabled": true,
       "file": "terminal_tool.py"
     }
   }

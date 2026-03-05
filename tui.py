@@ -495,6 +495,9 @@ class ArquitectoApp(App):
                     return
                 
                 if event.key == "enter":
+                    # Prevenir el comportamiento por defecto del SelectionList
+                    event.stop()
+                    
                     # Capturar Enter y procesar la selección
                     try:
                         selection_list = self.query_one("#tools-selection-list")
@@ -510,6 +513,7 @@ class ArquitectoApp(App):
                         self.notify(f"Error al guardar selección: {e}", severity="error")
                         self.dismiss(None)
                 elif event.key == "escape":
+                    event.stop()
                     self.dismiss(None)
             
             def _close_and_callback(self, selected_tools: list[str]) -> None:
