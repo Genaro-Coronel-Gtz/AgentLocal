@@ -306,6 +306,11 @@ class ArquitectoApp(App):
     ToolsMenu {
         align: center middle;
     }
+    
+    /* Estilos para centrar el modal de modelos */
+    ModelMenu {
+        align: center middle;
+    }
     """
 
     def compose(self) -> ComposeResult:
