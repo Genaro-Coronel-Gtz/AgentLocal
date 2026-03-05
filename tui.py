@@ -461,7 +461,7 @@ class ArquitectoApp(App):
                         for tool_id, info in self.tools_config.items()
                     ]
                     
-                    # Crear SelectionList con las opciones
+                    # Crear SelectionList simple sin preselección
                     yield SelectionList(*options, id="tools-selection-list")
                     
                     yield Label("Espacio: Seleccionar/Deseleccionar | Enter: Guardar | Esc: Cancelar", id="tools-menu-help")
@@ -471,7 +471,7 @@ class ArquitectoApp(App):
                 selection_list = self.query_one("#tools-selection-list")
                 selection_list.focus()
                 
-                # Preseleccionar las herramientas habilitadas
+                # Identificar herramientas habilitadas
                 enabled_tool_ids = [
                     tool_id for tool_id, info in self.tools_config.items() 
                     if info.get("enabled", True)
@@ -480,10 +480,12 @@ class ArquitectoApp(App):
                 # Guardar la selección inicial
                 self._last_selection = set(enabled_tool_ids)
                 
-                # Seleccionar las herramientas habilitadas
-                for option in selection_list._options:
-                    if option.value in enabled_tool_ids:
-                        option._selected = True
+                # Preseleccionar las herramientas habilitadas
+                for tool_id in enabled_tool_ids:
+                    try:
+                        selection_list.select(tool_id)
+                    except:
+                        pass  # Ignorar errores si ya está seleccionada
                 
                 self._initialized = True
             
