@@ -259,7 +259,7 @@ class ArquitectoApp(App):
         width: 80;
         height: auto;
         background: #24283b;
-        border: thick #7aa2f7;
+        border: solid #414868;
         padding: 2;
         margin: 1 1;
     }
@@ -300,6 +300,11 @@ class ArquitectoApp(App):
         text-style: italic;
         text-align: center;
         margin-top: 1;
+    }
+    
+    /* Estilos para centrar el modal */
+    ToolsMenu {
+        align: center middle;
     }
     """
 

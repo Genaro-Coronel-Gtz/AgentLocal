@@ -9,7 +9,7 @@
     "FileWriteTool": {
       "name": "Escritor de Archivos",
       "description": "Crea y modifica archivos del proyecto",
-      "enabled": true,
+      "enabled": false,
       "file": "file_write_tool.py"
     },
     "FileReadTool": {
