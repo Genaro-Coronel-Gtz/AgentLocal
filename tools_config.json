@@ -1,0 +1,28 @@
+{
+  "tools": {
+    "RepoMapTool": {
+      "name": "Mapeador de Repositorio",
+      "description": "Analiza y mapea la estructura del proyecto",
+      "enabled": true,
+      "file": "repo_map_tool.py"
+    },
+    "FileWriteTool": {
+      "name": "Escritor de Archivos",
+      "description": "Crea y modifica archivos del proyecto",
+      "enabled": true,
+      "file": "file_write_tool.py"
+    },
+    "FileReadTool": {
+      "name": "Lector de Archivos",
+      "description": "Lee archivos del proyecto",
+      "enabled": true,
+      "file": "file_read_tool.py"
+    },
+    "TerminalTool": {
+      "name": "Terminal",
+      "description": "Ejecuta comandos del sistema",
+      "enabled": false,
+      "file": "terminal_tool.py"
+    }
+  }
+}

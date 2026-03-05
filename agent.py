@@ -1,9 +1,7 @@
 import os
+import json
 from dotenv import load_dotenv
 from smolagents import LiteLLMModel, ToolCallingAgent
-
-# Importar herramientas desde la carpeta tools
-from tools import RepoMapTool, FileWriteTool, FileReadTool, TerminalTool
 
 # Cargar variables de entorno desde .env
 load_dotenv()
@@ -19,9 +17,46 @@ SYSTEM_PROMPT_TEMPLATE = os.getenv("SYSTEM_PROMPT", "")
 # Formatear el system prompt con el PROJECT_BASE
 SYSTEM_PROMPT = SYSTEM_PROMPT_TEMPLATE.format(PROJECT_BASE=PROJECT_BASE) if SYSTEM_PROMPT_TEMPLATE else ""
 
+def load_enabled_tools():
+    """Carga solo las herramientas habilitadas desde tools_config.json"""
+    try:
+        with open("tools_config.json", "r", encoding="utf-8") as f:
+            config = json.load(f)
+        
+        tools_config = config.get("tools", {})
+        enabled_tools = []
+        
+        # Importar todas las herramientas disponibles
+        from tools import RepoMapTool, FileWriteTool, FileReadTool, TerminalTool
+        
+        # Mapeo de herramientas a clases
+        tool_classes = {
+            "RepoMapTool": RepoMapTool,
+            "FileWriteTool": FileWriteTool,
+            "FileReadTool": FileReadTool,
+            "TerminalTool": TerminalTool
+        }
+        
+        # Cargar solo las herramientas habilitadas
+        for tool_id, tool_info in tools_config.items():
+            if tool_info.get("enabled", True) and tool_id in tool_classes:
+                enabled_tools.append(tool_classes[tool_id]())
+        
+        return enabled_tools
+        
+    except FileNotFoundError:
+        # Si no existe el archivo, cargar todas las herramientas por defecto
+        from tools import RepoMapTool, FileWriteTool, FileReadTool, TerminalTool
+        return [RepoMapTool(), FileWriteTool(), TerminalTool(), FileReadTool()]
+    except Exception as e:
+        print(f"Error cargando herramientas: {e}")
+        # En caso de error, cargar todas las herramientas
+        from tools import RepoMapTool, FileWriteTool, FileReadTool, TerminalTool
+        return [RepoMapTool(), FileWriteTool(), TerminalTool(), FileReadTool()]
+
 # --- AGENTE ---
 agent = ToolCallingAgent(
-    tools=[RepoMapTool(), FileWriteTool(), TerminalTool(), FileReadTool()],
+    tools=load_enabled_tools(),
     model=LiteLLMModel(model_id=f"ollama/{MODEL_ID}", api_base=API_BASE),
     add_base_tools=True,
     max_steps=MAX_STEPS
@@ -41,7 +76,7 @@ def update_agent_model(new_model_id: str) -> bool:
     try:
         MODEL_ID = new_model_id
         agent = ToolCallingAgent(
-            tools=[RepoMapTool(), FileWriteTool(), TerminalTool(), FileReadTool()],
+            tools=load_enabled_tools(),
             model=LiteLLMModel(model_id=f"ollama/{MODEL_ID}", api_base=API_BASE),
             add_base_tools=True,
             max_steps=MAX_STEPS
@@ -75,6 +110,26 @@ def get_available_models() -> list:
     except Exception as e:
         print(f"Error obteniendo modelos: {e}")
         return []
+
+def reload_agent_tools() -> bool:
+    """
+    Recarga las herramientas del agente con la configuración actual.
+    
+    Returns:
+        bool: True si se recargaron correctamente, False si hubo error
+    """
+    global agent
+    try:
+        agent = ToolCallingAgent(
+            tools=load_enabled_tools(),
+            model=LiteLLMModel(model_id=f"ollama/{MODEL_ID}", api_base=API_BASE),
+            add_base_tools=True,
+            max_steps=MAX_STEPS
+        )
+        return True
+    except Exception as e:
+        print(f"Error recargando herramientas: {e}")
+        return False
 
 
 def run_agent_task(user_text: str) -> str:
