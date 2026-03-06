@@ -1,7 +1,7 @@
 import os
 import json
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, Input, Static, RichLog, Label, LoadingIndicator, Select, SelectionList
+from textual.widgets import Header, Footer, Input, Static, RichLog, Label, LoadingIndicator, Select, SelectionList, TextArea
 from textual.widgets._selection_list import Selection
 from textual.containers import Container, VerticalScroll, Vertical, Horizontal
 from textual import work
@@ -117,8 +117,9 @@ class ArquitectoApp(App):
     #user-input {
         dock: bottom;
         height: 5; 
-        margin: 1;
-        border: double #bb9af7;
+        margin-top: 0;
+        margin-bottom: 1;
+        border: solid #bb9af7;
         background: #1a1b26;
         color: white;
     }
@@ -332,7 +333,7 @@ class ArquitectoApp(App):
                     yield LoadingIndicator()
                     yield Label(" El Arquitecto está operando...", variant="title")
             yield RichLog(id="log_area", highlight=True, markup=True)
-        yield Input(placeholder="> Describe la tarea...", id="user-input")
+        yield TextArea(placeholder="> Describe la tarea...", id="user-input")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -559,10 +560,15 @@ class ArquitectoApp(App):
         self.call_from_thread(loader.remove_class, "visible")
         self.call_from_thread(chat_area.scroll_end)
 
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        if event.value.strip():
-            self.process_task(event.value)
-            event.input.value = ""
+    def on_text_area_changed(self, event: TextArea.Changed) -> None:
+        """Maneja el cambio en el TextArea y detecta Enter para enviar"""
+        # Si el evento contiene Enter y no está vacío, enviar el mensaje
+        if "\n" in event.text_area.text and event.text_area.text.strip().replace("\n", "").strip():
+            # Obtener el texto sin el Enter final
+            user_text = event.text_area.text.strip().replace("\n", "").strip()
+            if user_text:
+                self.process_task(user_text)
+                event.text_area.text = ""
 
 if __name__ == "__main__":
     if os.path.exists("agent_audit.log"): open("agent_audit.log", "w").close()
