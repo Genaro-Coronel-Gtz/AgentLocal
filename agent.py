@@ -132,18 +132,25 @@ def reload_agent_tools() -> bool:
         return False
 
 
-def run_agent_task(user_text: str) -> str:
+def run_agent_task(user_text: str, skills_context: str = "") -> str:
     """
     Ejecuta una tarea del agente con el texto proporcionado por el usuario.
     
     Args:
         user_text (str): La tarea o instrucción para el agente
+        skills_context (str): Contexto relevante de skills activas
         
     Returns:
         str: La respuesta del agente
     """
     try:
-        response = agent.run(f"{SYSTEM_PROMPT}\n\nTarea: {user_text}")
+        # Construir el prompt con contexto de skills si está disponible
+        full_prompt = f"{SYSTEM_PROMPT}"
+        if skills_context:
+            full_prompt += f"\n\n{skills_context}"
+        full_prompt += f"\n\nTarea: {user_text}"
+        
+        response = agent.run(full_prompt)
         return response
     except Exception as e:
         return f"❌ ERROR: {str(e)}"

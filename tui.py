@@ -1,7 +1,8 @@
 import os
 import json
+from typing import List, Dict, Any, Optional
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, Input, Static, RichLog, Label, LoadingIndicator, Select, SelectionList, TextArea
+from textual.widgets import Header, Footer, Input, Static, RichLog, Label, LoadingIndicator, Select, SelectionList, TextArea, Button
 from textual.widgets._selection_list import Selection
 from textual.containers import Container, VerticalScroll, Vertical, Horizontal
 from textual import work
@@ -10,6 +11,8 @@ from textual.screen import ModalScreen
 
 # Importar el agente desde agent.py
 from agent import agent, SYSTEM_PROMPT, PROJECT_BASE, MODEL_ID, PROVIDER, run_agent_task, update_agent_model, get_available_models, reload_agent_tools
+# Importar el SkillManager
+from skill_manager import SkillManager
 
 def load_tools_config():
     """Carga la configuración de herramientas desde el archivo JSON"""
@@ -64,6 +67,7 @@ class ArquitectoApp(App):
     BINDINGS = [
         Binding("ctrl+m", "show_model_menu", "Modelos"),
         Binding("ctrl+t", "show_tools_menu", "Herramientas"),
+        Binding("a", "add_skill", "Agregar Skill"),
         Binding("ctrl+q", "quit", "Salir"),
     ]
     
@@ -79,6 +83,13 @@ class ArquitectoApp(App):
         layout: vertical;
     }
 
+    /* Contenedor de la derecha (Skills + Log) */
+    #right_pane {
+        width: 35%;
+        height: 1fr;
+        layout: vertical;
+    }
+
     #chat_area { 
         height: 1fr; /* Ocupa todo el espacio disponible */
         border: tall #414868; 
@@ -87,8 +98,58 @@ class ArquitectoApp(App):
     }
     #chat_area.working { border: tall #bb9af7; }
 
+    /* Panel de Skills */
+    #skills-panel {
+        height: 40%;
+        border: tall #414868;
+        background: #1f2335;
+        padding: 1;
+        margin-bottom: 1;
+    }
+
+    #skills-title {
+        text-align: center;
+        color: #7aa2f7;
+        text-style: bold;
+        margin-bottom: 1;
+    }
+
+    #skills-selection-list {
+        height: 1fr;
+        margin: 1 0;
+        border: solid #414868;
+    }
+
+    #skills-selection-list > .selection-list--option {
+        padding: 1;
+        margin: 0 0;
+        background: #1f2335;
+        color: #9ece6a;
+    }
+
+    #skills-selection-list > .selection-list--option:hover {
+        background: #24283b;
+        color: #e0af68;
+    }
+
+    #skills-selection-list > .selection-list--option.selected {
+        background: #7aa2f7;
+        color: #1a1b26;
+    }
+
+    #refresh-skills-btn {
+        margin-top: 1;
+        background: #414868;
+        color: #7aa2f7;
+    }
+
+    #refresh-skills-btn:hover {
+        background: #7aa2f7;
+        color: #1a1b26;
+    }
+
     #log_area { 
-        width: 35%; 
+        height: 60%;
         border: tall #414868; 
         background: #16161e; 
         color: #7aa2f7; 
@@ -312,6 +373,53 @@ class ArquitectoApp(App):
     ModelMenu {
         align: center middle;
     }
+    
+    /* Estilos para centrar el modal de agregar skill */
+    AddSkillModal {
+        align: center middle;
+    }
+    
+    #add-skill-content {
+        width: 60;
+        height: auto;
+        background: #24283b;
+        border: solid #414868;
+        padding: 2;
+        margin: 1 1;
+    }
+    
+    #add-skill-title {
+        text-align: center;
+        color: #7aa2f7;
+        text-style: bold;
+        margin-bottom: 1;
+    }
+    
+    #skill-name-input, #skill-path-input {
+        margin: 1 0;
+        border: solid #414868;
+        background: #1f2335;
+        color: white;
+    }
+    
+    #save-skill-btn {
+        margin: 1 0;
+        background: #7aa2f7;
+        color: #1a1b26;
+        text-style: bold;
+    }
+    
+    #save-skill-btn:hover {
+        background: #bb9af7;
+        color: #1a1b26;
+    }
+    
+    #add-skill-help {
+        color: #565f89;
+        text-style: italic;
+        text-align: center;
+        margin-top: 1;
+    }
     """
 
     def compose(self) -> ComposeResult:
@@ -323,7 +431,7 @@ class ArquitectoApp(App):
             with Horizontal(id="header-content"):
                 with Vertical(id="title-section"):
                     yield Label("AgentScripting", id="app-title")
-                    yield Label(f"Modelo: {MODEL_ID} | Ctrl+M: Modelos | Ctrl+T: Herramientas", id="current-model")
+                    yield Label(f"Modelo: {MODEL_ID} | Ctrl+M: Modelos | Ctrl+T: Herramientas | A: Agregar Skill", id="current-model")
         
         with Container(id="main_container"):
             with Vertical(id="chat_vertical"):
@@ -332,7 +440,14 @@ class ArquitectoApp(App):
                 with Static(id="loader-container"):
                     yield LoadingIndicator()
                     yield Label(" El Arquitecto está operando...", variant="title")
-            yield RichLog(id="log_area", highlight=True, markup=True)
+            with Vertical(id="right_pane"):
+                # Panel de Skills
+                with Vertical(id="skills-panel"):
+                    yield Label("🧠 Skills Activas", id="skills-title")
+                    yield SelectionList(id="skills-selection-list")
+                    yield Button("Actualizar Skills", id="refresh-skills-btn")
+                # RichLog
+                yield RichLog(id="log_area", highlight=True, markup=True)
         yield TextArea(placeholder="> Describe la tarea...", id="user-input")
         yield Footer()
 
@@ -341,6 +456,17 @@ class ArquitectoApp(App):
         self.title = f"Arquitecto Senior M4 [{PROVIDER}]"
         self.sub_title = f"Modelo: {self.current_model} | 📂 {PROJECT_BASE} | 🔧 Ctrl+T: Herramientas"
         self.set_interval(0.5, self.update_logs)
+        
+        # Inicializar SkillManager
+        self.skill_manager = SkillManager()
+        self.active_skills = []
+        
+        self.notify("🚀 Aplicación iniciada", severity="information")
+        self.notify("🔧 Inicializando SkillManager...", severity="information")
+        
+        # Cargar skills disponibles inicialmente
+        self.set_timer(1.0, self.refresh_skills_list)
+        self.notify("⏰ Timer configurado para actualizar skills en 1 segundo", severity="information")
     
     def action_show_model_menu(self) -> None:
         """Muestra el menú de selección de modelos tipo palette"""
@@ -550,7 +676,23 @@ class ArquitectoApp(App):
         self.call_from_thread(chat_area.scroll_end)
 
         try:
-            response = run_agent_task(user_text)
+            # Obtener skills activas y contexto relevante
+            active_skills_ids = self.get_active_skills_ids()
+            skills_context = ""
+            
+            # Obtener skills habilitadas desde la base de datos
+            enabled_skills = self.skill_manager.get_enabled_skills()
+            
+            if enabled_skills:
+                skills_results = self.skill_manager.search_skills(user_text, enabled_skills)
+                if skills_results:
+                    skills_context = "\n[CONTEXTO DE SKILLS ACTIVAS]\n"
+                    for result in skills_results[:3]:  # Limitar a los 3 más relevantes
+                        skills_context += f"\nSkill: {result['skill_id']}\n{result['text']}\n"
+                    skills_context += "\n"
+            
+            # Ejecutar el agente con contexto de skills
+            response = run_agent_task(user_text, skills_context)
             self.call_from_thread(chat_area.mount, Label(f"🤖 ARQUITECTO:\n{response}", classes="agent-msg"))
         except Exception as e:
             self.call_from_thread(chat_area.mount, Label(f"❌ ERROR: {str(e)}", classes="agent-msg"))
@@ -569,6 +711,193 @@ class ArquitectoApp(App):
             if user_text:
                 self.process_task(user_text)
                 event.text_area.text = ""
+    
+    def action_add_skill(self) -> None:
+        """Abre el modal para agregar una nueva skill"""
+        class AddSkillModal(ModalScreen):
+            BINDINGS = [
+                Binding("escape", "dismiss", "Cancelar"),
+            ]
+            
+            def compose(self) -> ComposeResult:
+                with Vertical(id="add-skill-content"):
+                    yield Label("🧠 Agregar Nueva Skill", id="add-skill-title")
+                    yield Input(placeholder="Nombre de la Skill", id="skill-name-input")
+                    yield Input(placeholder="Ruta del archivo .md", id="skill-path-input")
+                    yield Button("Guardar Skill", id="save-skill-btn")
+                    yield Label("Enter: Guardar | Esc: Cancelar", id="add-skill-help")
+            
+            def on_mount(self) -> None:
+                self.query_one("#skill-name-input").focus()
+                self._initialized = True
+            
+            def on_key(self, event) -> None:
+                """Maneja eventos de teclado para capturar Enter"""
+                if not self._initialized:
+                    return
+                
+                if event.key == "enter":
+                    event.stop()
+                    self._save_skill()
+                elif event.key == "escape":
+                    event.stop()
+                    self.dismiss(None)
+            
+            def on_button_pressed(self, event: Button.Pressed) -> None:
+                """Maneja el botón de guardar"""
+                if event.button.id == "save-skill-btn":
+                    self._save_skill()
+            
+            def _save_skill(self) -> None:
+                skill_name = self.query_one("#skill-name-input").value.strip()
+                skill_path = self.query_one("#skill-path-input").value.strip()
+                
+                if not skill_name or not skill_path:
+                    self.notify("Debe completar ambos campos", severity="error")
+                    return
+                
+                # Convertir ruta relativa a absoluta
+                if skill_path.startswith('/'):
+                    # Ruta absoluta desde el proyecto
+                    skill_path = os.path.join(os.getcwd(), skill_path.lstrip('/'))
+                elif not skill_path.startswith('./'):
+                    # Agregar ./ si no está presente
+                    skill_path = os.path.join(os.getcwd(), skill_path)
+                
+                # Validar que el archivo existe
+                if not os.path.exists(skill_path):
+                    self.notify(f"El archivo {skill_path} no existe", severity="error")
+                    return
+                
+                # Iniciar proceso de ingesta asíncrono desde el modal
+                self._ingest_skill_async(skill_path, skill_name)
+                self.notify(f"Procesando skill: {skill_name}", severity="information")
+                self.dismiss(None)
+            
+            @work(exclusive=True, thread=True)
+            def _ingest_skill_async(self, skill_path: str, skill_name: str) -> None:
+                """Proceso asíncrono de ingesta de skill"""
+                try:
+                    result = self.app.skill_manager.ingest_skill(skill_path, skill_name)
+                    if result.get("success"):
+                        self.app.call_from_thread(
+                            lambda: self.app.notify(
+                                f"Skill '{skill_name}' procesada correctamente: {result.get('chunks_processed', 0)} chunks", 
+                                severity="success"
+                            )
+                        )
+                        # Actualizar lista de skills
+                        self.app.call_from_thread(self.app.refresh_skills_list)
+                    else:
+                        self.app.call_from_thread(
+                            lambda: self.app.notify(
+                                f"Error procesando skill: {result.get('error', 'Error desconocido')}", 
+                                severity="error"
+                            )
+                        )
+                except Exception as e:
+                    self.app.call_from_thread(
+                        lambda: self.app.notify(
+                            f"Error en ingesta de skill: {str(e)}", 
+                            severity="error"
+                        )
+                    )
+        
+        self.push_screen(AddSkillModal())
+    
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Maneja eventos de botones"""
+        if event.button.id == "refresh-skills-btn":
+            self.refresh_skills_list()
+    
+    def refresh_skills_list(self) -> None:
+        """Actualiza la lista de skills disponibles"""
+        try:
+            self.notify("🔄 Actualizando skills...", severity="information")
+            
+            skills = self.skill_manager.get_available_skills()
+            self.notify(f"📊 Skills obtenidas: {skills}", severity="information")
+            
+            if not skills:
+                self.notify("❌ No se encontraron skills", severity="warning")
+                return
+            
+            # Crear nuevas opciones con indicador de estado
+            options = []
+            for skill in skills:
+                is_enabled = self.skill_manager.is_skill_enabled(skill)
+                icon = "✅" if is_enabled else "☑️"
+                options.append(Selection(f"{icon} {skill}", skill))
+            
+            self.notify(f"🎯 Opciones creadas: {len(options)}", severity="information")
+            
+            # Obtener el SelectionList existente
+            skills_list = self.query_one("#skills-selection-list")
+            
+            # Limpiar todas las opciones existentes
+            skills_list.clear_options()
+            self.notify("✅ Opciones existentes eliminadas", severity="information")
+            
+            # Agregar las nuevas opciones
+            added_count = 0
+            for option in options:
+                try:
+                    skills_list.add_option(option)
+                    added_count += 1
+                    self.notify(f"✅ Opción agregada: {option.prompt}", severity="information")
+                except Exception as e:
+                    self.notify(f"❌ Error agregando opción {option.prompt}: {e}", severity="error")
+            
+            self.notify(f"✅ {added_count} opciones agregadas", severity="success")
+            self.notify("🔄 SelectionList actualizado", severity="success")
+            
+            # Restaurar selección de skills habilitadas (desde la DB)
+            enabled_skills = self.skill_manager.get_enabled_skills()
+            restored_count = 0
+            for skill_id in enabled_skills:
+                if skill_id in skills:
+                    try:
+                        skills_list.select(skill_id)
+                        restored_count += 1
+                        self.notify(f"✅ Skill habilitada restaurada: {skill_id}", severity="information")
+                    except Exception as e:
+                        self.notify(f"❌ Error restaurando skill {skill_id}: {e}", severity="error")
+            
+            self.notify(f"🎉 Skills actualizadas: {len(skills)} disponibles, {len(enabled_skills)} habilitadas", severity="success")
+            
+        except Exception as e:
+            self.notify(f"❌ Error actualizando skills: {e}", severity="error")
+            import traceback
+            traceback.print_exc()
+    
+    def get_active_skills_ids(self) -> List[str]:
+        """Obtiene los IDs de las skills activas seleccionadas"""
+        try:
+            skills_list = self.query_one("#skills-selection-list")
+            return list(skills_list.selected)
+        except:
+            return []
+    
+    def on_selection_list_selected_changed(self, event: SelectionList.SelectedChanged) -> None:
+        """Maneja cambios en la selección de skills"""
+        try:
+            skill_id = str(event.selection.value)
+            is_selected = event.selection in event.selection_list.selected
+            
+            # Actualizar estado en la base de datos
+            success = self.skill_manager.set_skill_enabled(skill_id, is_selected)
+            
+            if success:
+                status = "habilitada" if is_selected else "deshabilitada"
+                self.notify(f"✅ Skill '{skill_id}' {status}", severity="success")
+                
+                # Actualizar el icono en la lista
+                self.refresh_skills_list()
+            else:
+                self.notify(f"❌ Error actualizando skill '{skill_id}'", severity="error")
+                
+        except Exception as e:
+            self.notify(f"❌ Error manejando selección: {e}", severity="error")
 
 if __name__ == "__main__":
     if os.path.exists("agent_audit.log"): open("agent_audit.log", "w").close()

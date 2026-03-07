@@ -42,3 +42,6 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+
+skills/*
+skills_db/*
